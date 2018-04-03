@@ -8,6 +8,8 @@ import java.awt.event.WindowStateListener;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
@@ -17,6 +19,7 @@ import javax.swing.JPanel;
 
 
 public class ImageExtractor {
+	protected static int index = 0;
 
 	public static void main(String[] args) throws Exception {
 		if (args == null || args.length != 1) {
@@ -27,16 +30,22 @@ public class ImageExtractor {
 		
 		ImageExtractor extractor = new ImageExtractor();
 		BufferedImage image = extractor.loadImage(imagePath);
-		BufferedImage split = extractor.split(image);
-		BufferedImage splitHorizontal = extractor.splitHorizontal(split);
-		BufferedImage scaled = extractor.scale(splitHorizontal, 10);
-		extractor.save(scaled);
+		BufferedImage[] split = extractor.splitHorizontal(image);
+		BufferedImage[][] all = new BufferedImage[split.length][];
+		for (int i = 0 ; i < split.length ; i++) {
+			BufferedImage[] splitVertical = extractor.splitVertical(split[i]);
+			all[i] = new BufferedImage[splitVertical.length];
+//			BufferedImage splitHorizontal = extractor.splitHorizontal(split[i]);
+			for (int j = 0 ; j < splitVertical.length ; j++) {
+				extractor.save(extractor.scale(splitVertical[j], 10), j * all.length + i);
+			}
+		}
 //		extractor.display(scaled);
 //		extractor.display(image);
 	}
 	
-	private void save(BufferedImage image) throws IOException {
-		File file = new File("C:\\Users\\earth\\Downloads\\00.png");
+	private void save(BufferedImage image, int index) throws IOException {
+		File file = new File(String.format("C:\\Users\\earth\\Downloads\\a\\%03d.png", index));
 		ImageIO.write(image, "png", file);
 	}
 	
@@ -53,7 +62,7 @@ public class ImageExtractor {
 	    return dimg;
 	}
 	
-	private BufferedImage split(BufferedImage image) {
+	private BufferedImage[] splitVertical(BufferedImage image) {
 		
 //		for (int i = 0 ; i < 100 ; i++) {
 //			int rgb = image.getRGB(i, i);
@@ -65,65 +74,99 @@ public class ImageExtractor {
 //			System.out.println(String.format("%d : %d - %d %d %d", i, i, r, g, b));
 //		}
 		
-		int[][] split = new int[100][];
+//		int[][] split = new int[100][];
 		int hIndex = 0;
 		// 0 - prepare
 		// 1 - start
 		int status = 0;
+		int startHeight = 0;
+		
 		int subHeight = 0;
+		int minEmptyHeader = image.getHeight(); 
+		int minEmptyTail = minEmptyHeader; 
+		
+		List<BufferedImage> result = new ArrayList<BufferedImage>();
+		
 		for (int h = 0 ; h < image.getHeight() ; h++) {
-			int[] line = new int[image.getWidth()];
 			boolean isNull = true;
+			int emptyHeaderCounter = 0;
+			int emptyTailCounter = 0;
+			
 			for (int w = 0 ; w < image.getWidth() ; w++) {
-				line[w] = image.getRGB(w, h);
-				if (line[w] != 0) isNull = false;
+				int rgb = image.getRGB(w, h);
+				if (rgb != 0) {
+					isNull = false;
+					emptyTailCounter = 0;
+				} else {
+					if (isNull) {
+						emptyHeaderCounter++;
+					} else {
+						emptyTailCounter++;
+					}
+				}
 				
 			}
 			if (!isNull) {
-				split[hIndex++] = line;
+//				split[hIndex++] = line;
 				subHeight++;
 				status = 1;
+				
+				if (minEmptyHeader > emptyHeaderCounter) {
+					minEmptyHeader = emptyHeaderCounter;
+				}
+				if (minEmptyTail > emptyTailCounter) {
+					minEmptyTail = emptyTailCounter;
+				}
+				
 			} else {
 				if (status == 1) {
-					status = 0;
 					// 한무더기 끝
-					// subHeight = 0;
-					break;
+					System.out.println(String.format("index %d : left - %d , right - %d", index++, minEmptyHeader, minEmptyTail));
+					result.add(image.getSubimage(0 + minEmptyHeader, startHeight, image.getWidth() - minEmptyHeader - minEmptyTail, subHeight));
+					status = 0;
+					subHeight = 0;
+					
+					minEmptyHeader = image.getHeight(); 
+					minEmptyTail = minEmptyHeader;
+//					break;
 				}
+				startHeight = h + 1;
 			}
 		}
-		
-		BufferedImage resultImage = new BufferedImage(image.getWidth(), subHeight, image.getType());
-		for (int i = 0 ; i < split.length ; i++) {
-			if (split[i] == null) {
-				break;
-			}
-			for (int j = 0 ; j < image.getWidth() ; j++) {
-				resultImage.setRGB(j, i, split[i][j]);
-			}
-		}
-		return resultImage;
+		result.add(image.getSubimage(0 + minEmptyHeader, startHeight, image.getWidth() - minEmptyHeader - minEmptyTail, subHeight));
+//		BufferedImage resultImage = new BufferedImage(image.getWidth(), subHeight, image.getType());
+//		for (int i = 0 ; i < split.length ; i++) {
+//			if (split[i] == null) {
+//				break;
+//			}
+//			for (int j = 0 ; j < image.getWidth() ; j++) {
+//				resultImage.setRGB(j, i, split[i][j]);
+//			}
+//		}
+		return result.toArray(new BufferedImage[result.size()]);
 	}
-	private BufferedImage splitHorizontal(BufferedImage image) {
+	private BufferedImage[] splitHorizontal(BufferedImage image) {
 		
 		
 		int[][] split = new int[100][];
-		int hIndex = 0;
+		
 		// 0 - prepare
 		// 1 - start
 		int status = 0;
+		int startWidth = 0;
 		int subWidth = 0;
 		int minEmptyHeader = image.getHeight(); 
 		int minEmptyTail = minEmptyHeader; 
 				
+		List<BufferedImage> result = new ArrayList<BufferedImage>();
+		
 		for (int w = 0 ; w < image.getWidth() ; w++) {
-			int[] line = new int[image.getHeight()];
 			boolean isNull = true;
 			int emptyHeaderCounter = 0;
 			int emptyTailCounter = 0;
 			for (int h = 0 ; h < image.getHeight() ; h++) {
-				line[h] = image.getRGB(w, h);
-				if (line[h] != 0) {
+				int rgb = image.getRGB(w, h);
+				if (rgb != 0) {
 					isNull = false;
 					emptyTailCounter = 0;
 				} else {
@@ -136,7 +179,6 @@ public class ImageExtractor {
 			}
 			
 			if (!isNull) {
-				split[hIndex++] = line;
 				subWidth++;
 				status = 1;
 				
@@ -148,24 +190,28 @@ public class ImageExtractor {
 				}
 			} else {
 				if (status == 1) {
-					status = 0;
 					// 한무더기 끝
-					// subHeight = 0;
-					break;
+					result.add(image.getSubimage(startWidth, minEmptyHeader, subWidth, image.getHeight() - minEmptyHeader - minEmptyTail));
+					status = 0;
+					subWidth = 0;
+					minEmptyHeader = image.getHeight(); 
+					minEmptyTail = minEmptyHeader;
+//					break;
 				}
+				startWidth = w + 1;
 			}
 		}
 		
-		BufferedImage resultImage = new BufferedImage(subWidth, image.getHeight() - minEmptyHeader - minEmptyTail, image.getType());
-		for (int i = 0 ; i < split.length ; i++) {
-			if (split[i] == null) {
-				break;
-			}
-			for (int j = 0 ; j < image.getHeight() - minEmptyHeader - minEmptyTail ; j++) {
-				resultImage.setRGB(i, j, split[i][j + minEmptyHeader]);
-			}
-		}
-		return resultImage;
+//		BufferedImage resultImage = new BufferedImage(subWidth, image.getHeight() - minEmptyHeader - minEmptyTail, image.getType());
+//		for (int i = 0 ; i < split.length ; i++) {
+//			if (split[i] == null) {
+//				break;
+//			}
+//			for (int j = 0 ; j < image.getHeight() - minEmptyHeader - minEmptyTail ; j++) {
+//				resultImage.setRGB(i, j, split[i][j + minEmptyHeader]);
+//			}
+//		}
+		return result.toArray(new BufferedImage[result.size()]);
 	}
 	
 	private BufferedImage loadImage(String imagePath) throws IOException {
